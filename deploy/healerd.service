@@ -1,0 +1,16 @@
+[Unit]
+Description=healerd - eBPF self-healing agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/healerd -config /etc/healerd/healerd.yaml
+Restart=always
+RestartSec=5
+# Needs BPF, perf and tracing access plus the ability to restart units.
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN CAP_KILL
+NoNewPrivileges=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
