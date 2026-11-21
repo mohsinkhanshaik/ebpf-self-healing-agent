@@ -1,0 +1,53 @@
+# healerd policy. Every rule: signal -> match -> threshold -> action -> verify -> escalate.
+node_name: ""                  # defaults to the hostname
+dry_run: false
+metrics_addr: ":9464"
+retransmit_poll_interval: 1s
+
+rules:
+  # The API keeps getting OOM-killed: restart it, but stop after 3 restarts an
+  # hour. Repeated OOMs mean a leak or a bad deploy, which a restart won't fix.
+  - name: api-oom-restart
+    signal: oom_kill
+    match: { comm: api-server }
+    threshold: 1
+    cooldown: 2m
+    max_per_hour: 3
+    action: { type: restart_systemd, unit: api-server.service }
+    verify:
+      http_get: http://127.0.0.1:8080/healthz
+      initial_delay: 3s
+      retries: 5
+      interval: 2s
+    escalate: { webhook: "https://hooks.slack.com/services/REPLACE/ME" }
+
+  # The worker crashed (non-zero exit or killed by a signal) twice in 5 minutes.
+  - name: worker-crashloop
+    signal: process_exit
+    match: { comm: queue-worker, only_failures: true }
+    threshold: 2
+    window: 5m
+    cooldown: 1m
+    action: { type: restart_systemd, unit: queue-worker.service }
+    escalate: { webhook: "https://hooks.slack.com/services/REPLACE/ME" }
+
+  # Segfaults: capture a core dump and diagnostics before anything restarts it.
+  - name: segfault-diagnostics
+    signal: crash_signal
+    match: { signals: [11, 6, 7] }  # SIGSEGV, SIGABRT, SIGBUS
+    cooldown: 10m
+    action:
+      type: exec
+      command: ["/usr/local/bin/collect-diagnostics", "--pid=${PID}", "--comm=${COMM}", "--node=${NODE}"]
+
+  # The database link is lossy: more than 200 retransmits to Postgres in 30s.
+  # On Kubernetes, cordon the node so new pods land somewhere healthier.
+  - name: db-path-degraded
+    signal: tcp_retransmit
+    match: { dest: "10.0.12.5:5432" }
+    threshold: 200
+    window: 30s
+    cooldown: 15m
+    max_per_hour: 1
+    action: { type: cordon_node }
+    escalate: { webhook: "https://hooks.slack.com/services/REPLACE/ME" }
