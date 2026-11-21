@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install eBPF toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang llvm libbpf-dev
+
+      - name: Resolve modules
+        run: go mod tidy
+
+      - name: Compile eBPF and generate bindings
+        run: make generate
+
+      - name: Vet
+        run: make vet
+
+      - name: Unit tests
+        run: make test
+
+      - name: Build
+        run: make build
+
+      - name: Replay demo
+        run: make demo
+
+      - name: Smoke test (real kernel, root)
+        run: make smoke
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: healerd-linux-amd64
+          path: bin/healerd
