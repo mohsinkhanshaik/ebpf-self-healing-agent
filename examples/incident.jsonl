@@ -1,0 +1,15 @@
+# A replayable incident: try it with
+#   go run ./cmd/healerd -config examples/healerd.yaml -replay examples/incident.jsonl -dry-run
+# api-server OOMs twice; the second lands inside the 2m cooldown and is suppressed
+{"kind":"oom_kill","pid":4101,"comm":"api-server"}
+{"kind":"oom_kill","pid":4188,"comm":"api-server"}
+# worker exits cleanly once (ignored), then crashes twice (fires)
+{"kind":"process_exit","pid":5200,"comm":"queue-worker"}
+{"kind":"process_exit","pid":5201,"comm":"queue-worker","exit_status":1}
+{"kind":"process_exit","pid":5202,"comm":"queue-worker","signal":11}
+# a segfault elsewhere
+{"kind":"crash_signal","pid":6001,"comm":"image-resizer","signal":11}
+# retransmit bursts toward the database cross 200 in the window
+{"kind":"tcp_retransmit","dest":"10.0.12.5:5432","count":90}
+{"kind":"tcp_retransmit","dest":"10.0.99.1:443","count":500}
+{"kind":"tcp_retransmit","dest":"10.0.12.5:5432","count":130}
