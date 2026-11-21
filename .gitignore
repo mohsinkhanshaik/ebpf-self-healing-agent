@@ -1,0 +1,3 @@
+/bin/
+*.o
+internal/probe/agent_bpfel.go
